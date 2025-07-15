@@ -1,8 +1,10 @@
 // Firebase Config
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyAL3l3Fb9_Q1CAkjwxEBvG6Tb1W-HJwUCI",
   authDomain: "hqchulo.firebaseapp.com",
+  databaseURL: "https://hqchulo-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "hqchulo",
   storageBucket: "hqchulo.firebasestorage.app",
   messagingSenderId: "1008179913372",
