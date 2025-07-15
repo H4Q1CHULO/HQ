@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PID Control Settings</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    h2 {
+      color: #2c3e50;
+      margin-top: 0;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    
+    label {
+      display: block;
+      margin: 15px 0 5px;
+      font-weight: bold;
+    }
+    
+    input[type="number"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 10px;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    
+    button:hover {
+      background-color: #2980b9;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+    
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    
+    th {
+      background-color: #f2f2f2;
+    }
+    
+    pre {
+      background-color: #f8f8f8;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    
+    code {
+      background-color: #f8f8f8;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    
+    .info {
+      background-color: #f9f9f9;
+      padding: 15px;
+      border-radius: 5px;
+      margin-top: 15px;
+    }
+    
+    .param-control {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    
+    .param-control input {
+      flex: 1;
+    }
+    
+    .status {
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+      display: none;
+    }
+    
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+</head>
+<body>
+
+  <div class="card">
+    <h2>System Status</h2>
+    <p>Current Mode: <span id="systemStatus">Loading...</span></p>
+    <p>Current PPM: <span id="currentPPM">Loading...</span></p>
+    <p>Pump Output: <span id="pumpOutput">Loading...</span>/255</p>
+  </div>
+
+  <div class="card">
+    <h2>Setpoint Control</h2>
+    <label for="setpointInput">Setpoint (PPM):</label>
+    <input type="number" id="setpointInput" step="0.1" />
+    <button onclick="updateSetpoint()">Update Setpoint</button>
+    <p>Current Setpoint: <span id="currentSetpoint">Loading...</span> ppm</p>
+    <div id="setpointStatus" class="status"></div>
+  </div>
+
+  <div class="card">
+    <h2>PID Parameters</h2>
+    <div class="param-control">
+      <label for="kpInput">Kp:</label>
+      <input type="number" id="kpInput" step="0.01" />
+      <button onclick="updatePIDParam('kp')">Update</button>
+    </div>
+    <div class="param-control">
+      <label for="kiInput">Ki:</label>
+      <input type="number" id="kiInput" step="0.01" />
+      <button onclick="updatePIDParam('ki')">Update</button>
+    </div>
+    <div class="param-control">
+      <label for="kdInput">Kd:</label>
+      <input type="number" id="kdInput" step="0.01" />
+      <button onclick="updatePIDParam('kd')">Update</button>
+    </div>
+    <p>Current Values:</p>
+    <ul>
+      <li>Kp: <span id="kp">Loading...</span></li>
+      <li>Ki: <span id="ki">Loading...</span></li>
+      <li>Kd: <span id="kd">Loading...</span></li>
+    </ul>
+    <div id="pidStatus" class="status"></div>
+  </div>
+
+  <div class="card">
+  <h2>Penjelasan Sistem TDS Control dan Rumus PID</h2>
+  <div class="info">
+    <h3>1. Rumus PID (Proportional-Integral-Derivative)</h3>
+    <p><strong>Rumus Dasar PID:</strong><br>
+    Output PID = P + I + D<br>
+    Dimana:</p>
+    <ul>
+      <li>P (Proportional) = Kp × Error</li>
+      <li>I (Integral) = Ki × ∫Error dt (integral dari error)</li>
+      <li>D (Derivative) = Kd × dError/dt (turunan dari error)</li>
+    </ul>
+
+    <h4>Penjelasan Setiap Komponen:</h4>
+    <p><strong>1. Proportional (P)</strong></p>
+    <ul>
+      <li>Bereaksi terhadap error saat ini</li>
+      <li>Semakin besar error, semakin besar output</li>
+      <li>Kp = 0.5 artinya output akan 50% dari nilai error</li>
+      <li>Fungsi: Memberikan respons cepat terhadap perubahan</li>
+    </ul>
+
+    <p><strong>2. Integral (I)</strong></p>
+    <ul>
+      <li>Mengatasi error yang persisten (steady-state error)</li>
+      <li>Mengakumulasi semua error dari waktu ke waktu</li>
+      <li>Ki = 0.01 artinya setiap error akan diakumulasi dengan bobot 1%</li>
+      <li>Fungsi: Menghilangkan offset permanen</li>
+    </ul>
+
+    <p><strong>3. Derivative (D)</strong></p>
+    <ul>
+      <li>Memprediksi error di masa depan berdasarkan rate perubahan</li>
+      <li>Kd = 0.05 artinya 5% dari kecepatan perubahan error</li>
+      <li>Fungsi: Mengurangi overshoot dan oscillation</li>
+    </ul>
+
+    <h3>2. Cara Kerja Sistem TDS Control</h3>
+    <p><strong>Konsep Dasar:</strong><br>
+    Sistem ini mengontrol konsentrasi nutrisi dalam larutan hidroponik agar tetap pada nilai yang diinginkan (setpoint = 500 ppm).</p>
+    
+    <p><strong>Proses Kontrol:</strong></p>
+    <ol>
+      <li>Sensor TDS membaca konsentrasi nutrisi aktual</li>
+      <li>Sistem menghitung error = Target (500 ppm) - Aktual</li>
+      <li>Algoritma PID menghitung seberapa kuat pompa harus bekerja</li>
+      <li>Motor pompa menambahkan nutrisi sesuai perhitungan PID</li>
+      <li>Proses berulang setiap detik untuk menjaga kestabilan</li>
+    </ol>
+
+    <p><strong>Analogi Sederhana:</strong><br>
+    Seperti thermostat AC di rumah:</p>
+    <ul>
+      <li>Setpoint: Suhu yang diinginkan (misal 25°C)</li>
+      <li>Sensor: Termometer yang membaca suhu ruangan</li>
+      <li>Error: Selisih suhu aktual dengan target</li>
+      <li>Aktuator: Kompresor AC yang menyesuaikan pendinginan</li>
+      <li>PID: Logika yang menentukan seberapa keras AC bekerja</li>
+    </ul>
+
+    <h3>3. Komponen Sistem</h3>
+    <p><strong>Input (Sensor):</strong></p>
+    <ul>
+      <li>TDS Sensor: Mengukur konsentrasi nutrisi dalam ppm (parts per million)</li>
+      <li>pH Sensor: Mengukur tingkat keasaman larutan (0-14)</li>
+      <li>Ultrasonic Sensor: Mengukur ketinggian air dalam tangki</li>
+      <li>DHT11: Mengukur suhu dan kelembaban udara sekitar</li>
+    </ul>
+
+    <p><strong>Output (Aktuator):</strong></p>
+    <ul>
+      <li>Motor Pump: Memompa larutan nutrisi concentrate</li>
+      <li>LCD Display: Menampilkan data real-time</li>
+      <li>WiFi: Mengirim data ke cloud database</li>
+    </ul>
+
+    <p><strong>Prosesor:</strong></p>
+    <ul>
+      <li>ESP32: Mikrokontroler yang menjalankan algoritma PID dan mengkoordinasi semua komponen</li>
+    </ul>
+
+    <h3>4. Fitur Keamanan dan Optimasi</h3>
+    <p><strong>Anti-Windup Protection:</strong><br>
+    Mencegah integral term menjadi terlalu besar yang bisa menyebabkan sistem tidak stabil. Dibatasi maksimal 1000 dan minimum -1000.</p>
+    
+    <p><strong>Dead Zone:</strong><br>
+    Jika error sangat kecil (kurang dari 5 ppm), sistem akan mengurangi aktivitas untuk mencegah oscillation yang tidak perlu.</p>
+    
+    <p><strong>Median Filter:</strong><br>
+    Mengambil 30 sampel pembacaan sensor dan menggunakan nilai tengah untuk mengurangi noise dan mendapatkan pembacaan yang lebih akurat.</p>
+    
+    <p><strong>Minimum Speed Protection:</strong><br>
+    Motor tidak akan beroperasi di bawah 20% kecepatan untuk mencegah kondisi stall.</p>
+
+    <h3>5. Penjelasan Stepdown Converter</h3>
+    <p><strong>Definisi:</strong><br>
+    Stepdown converter (buck converter) adalah rangkaian elektronik yang menurunkan tegangan DC dari level tinggi ke level rendah dengan efisiensi tinggi.</p>
+    
+    <p><strong>Fungsi dalam Sistem:</strong></p>
+    <p>Power Supply Management: Mengubah tegangan input 12V menjadi:</p>
+    <ul>
+      <li>3.3V untuk ESP32</li>
+      <li>5V untuk sensor dan LCD</li>
+      <li>Tegangan kerja yang sesuai untuk motor driver</li>
+    </ul>
+
+    <p><strong>Keuntungan Stepdown:</strong></p>
+    <ul>
+      <li>Efisiensi Tinggi: Energi tidak terbuang sebagai panas</li>
+      <li>Ukuran Kompak: Lebih kecil dibanding transformer</li>
+      <li>Regulasi Baik: Tegangan output stabil meski input berubah</li>
+      <li>Ripple Rendah: Output DC yang bersih</li>
+    </ul>
+
+    <h3>6. Aplikasi dalam Hidroponik</h3>
+    <p><strong>Manfaat Sistem:</strong></p>
+    <ul>
+      <li>Otomatisasi: Mengurangi intervensi manual</li>
+      <li>Presisi: Kontrol nutrisi yang akurat</li>
+      <li>Monitoring: Pengawasan real-time via smartphone</li>
+      <li>Efisiensi: Penggunaan nutrisi yang optimal</li>
+      <li>Konsistensi: Kualitas tanaman yang seragam</li>
+    </ul>
+
+    <p><strong>Parameter yang Dikontrol:</strong></p>
+    <ul>
+      <li>TDS: 500 ppm (konsentrasi nutrisi optimal)</li>
+      <li>pH: 5.5-6.5 (range optimal untuk hidroponik)</li>
+      <li>Water Level: Memastikan sistem tidak kehabisan air</li>
+      <li>Environment: Suhu dan kelembaban sekitar</li>
+    </ul>
+
+    <p>Sistem ini menggunakan prinsip feedback control loop dimana output sistem (konsentrasi nutrisi) dikembalikan sebagai input untuk penyesuaian kontrol selanjutnya, menciptakan sistem yang self-regulating dan adaptif.</p>
+  </div>
+</div>
+  <script>
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDKzX5Z2MPAabKkrTYuXvdRr8cqYbDhoWM",
+      databaseURL: "https://grow-iot-8fba8-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // References to Firebase paths
+    const refs = {
+      setpoint: database.ref('HQ/CONTROL/setpoin'),
+      pid: {
+        kp: database.ref('HQ/CONTROL/kp'),
+        ki: database.ref('HQ/CONTROL/ki'),
+        kd: database.ref('HQ/CONTROL/kd')
+      },
+      status: database.ref('hq/status'),
+      ppm: database.ref('hq/ppm'),
+      pwm: database.ref('hq/pwm1')
+    };
+
+    // Current tuning state
+    let isTuning = false;
+
+    // Initialize the page
+    document.addEventListener('DOMContentLoaded', function() {
+      // Load current values from Firebase
+      loadCurrentValues();
+      
+      // Set up real-time listeners
+      setupRealTimeListeners();
+    });
+
+    function loadCurrentValues() {
+      // Load setpoint
+      refs.setpoint.once('value').then(snapshot => {
+        const value = snapshot.val();
+        document.getElementById('setpointInput').value = value;
+        document.getElementById('currentSetpoint').textContent = value;
+      });
+
+      // Load PID parameters
+      refs.pid.kp.once('value').then(snapshot => {
+        document.getElementById('kpInput').value = snapshot.val();
+        document.getElementById('kp').textContent = snapshot.val();
+      });
+
+      refs.pid.ki.once('value').then(snapshot => {
+        document.getElementById('kiInput').value = snapshot.val();
+        document.getElementById('ki').textContent = snapshot.val();
+      });
+
+      refs.pid.kd.once('value').then(snapshot => {
+        document.getElementById('kdInput').value = snapshot.val();
+        document.getElementById('kd').textContent = snapshot.val();
+      });
+
+      // Load system status
+      refs.status.once('value').then(snapshot => {
+        document.getElementById('systemStatus').textContent = snapshot.val();
+        isTuning = snapshot.val() === 'TUNING';
+        updateZNTuningButton();
+      });
+
+      // Load current PPM and PWM
+      refs.ppm.once('value').then(snapshot => {
+        document.getElementById('currentPPM').textContent = snapshot.val().toFixed(1);
+      });
+
+      refs.pwm.once('value').then(snapshot => {
+        document.getElementById('pumpOutput').textContent = snapshot.val();
+      });
+    }
+
+    function setupRealTimeListeners() {
+      // Real-time updates for PID parameters
+      refs.pid.kp.on('value', snapshot => {
+        document.getElementById('kp').textContent = snapshot.val().toFixed(2);
+      });
+
+      refs.pid.ki.on('value', snapshot => {
+        document.getElementById('ki').textContent = snapshot.val().toFixed(2);
+      });
+
+      refs.pid.kd.on('value', snapshot => {
+        document.getElementById('kd').textContent = snapshot.val().toFixed(2);
+      });
+
+      // Real-time updates for system status
+      refs.status.on('value', snapshot => {
+        document.getElementById('systemStatus').textContent = snapshot.val();
+        isTuning = snapshot.val() === 'TUNING';
+        updateZNTuningButton();
+      });
+
+      // Real-time updates for PPM and PWM
+      refs.ppm.on('value', snapshot => {
+        document.getElementById('currentPPM').textContent = snapshot.val().toFixed(1);
+      });
+
+      refs.pwm.on('value', snapshot => {
+        document.getElementById('pumpOutput').textContent = snapshot.val();
+      });
+    }
+
+    function updateSetpoint() {
+      const setpointInput = document.getElementById('setpointInput');
+      const newSetpoint = parseFloat(setpointInput.value);
+      
+      if (isNaN(newSetpoint)) {
+        showStatus('setpointStatus', 'Please enter a valid number', 'error');
+        return;
+      }
+
+      refs.setpoint.set(newSetpoint)
+        .then(() => {
+          showStatus('setpointStatus', 'Setpoint updated successfully!', 'success');
+          document.getElementById('currentSetpoint').textContent = newSetpoint;
+        })
+        .catch(error => {
+          showStatus('setpointStatus', 'Error updating setpoint: ' + error.message, 'error');
+        });
+    }
+
+    function updatePIDParam(param) {
+      const inputElement = document.getElementById(param + 'Input');
+      const newValue = parseFloat(inputElement.value);
+      
+      if (isNaN(newValue)) {
+        showStatus('pidStatus', 'Please enter a valid number for ' + param, 'error');
+        return;
+      }
+
+      refs.pid[param].set(newValue)
+        .then(() => {
+          showStatus('pidStatus', param.toUpperCase() + ' updated successfully!', 'success');
+        })
+        .catch(error => {
+          showStatus('pidStatus', 'Error updating ' + param + ': ' + error.message, 'error');
+        });
+    }
+
+    function startZNTuning() {
+      if (isTuning) {
+        // Stop tuning
+        refs.status.set('RUNNING')
+          .then(() => {
+            showStatus('znStatus', 'Tuning stopped', 'success');
+            document.getElementById('znProgress').style.display = 'none';
+            isTuning = false;
+            updateZNTuningButton();
+          });
+      } else {
+        // Start tuning
+        refs.status.set('TUNING')
+          .then(() => {
+            showStatus('znStatus', 'Ziegler-Nichols tuning started!', 'success');
+            document.getElementById('znProgress').style.display = 'block';
+            isTuning = true;
+            updateZNTuningButton();
+            
+            // Reset tuning progress display
+            document.getElementById('currentKp').textContent = '0';
+            document.getElementById('oscillationCount').textContent = '0';
+            document.getElementById('oscillationPeriod').textContent = '0';
+          });
+      }
+    }
+
+    function updateZNTuningButton() {
+      const button = document.getElementById('znButton');
+      if (isTuning) {
+        button.textContent = 'Stop Autotuning';
+        button.style.backgroundColor = '#dc3545';
+      } else {
+        button.textContent = 'Start Autotuning';
+        button.style.backgroundColor = '#28a745';
+      }
+    }
+
+    function showStatus(elementId, message, type) {
+      const element = document.getElementById(elementId);
+      element.textContent = message;
+      element.className = 'status ' + type;
+      element.style.display = 'block';
+      
+      // Hide status after 3 seconds
+      setTimeout(() => {
+        element.style.display = 'none';
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
